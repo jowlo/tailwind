@@ -15,10 +15,9 @@ static BLEUUID serviceUUID("180D");
 // The characteristic of the remote service we are interested in.
 static BLEUUID    charUUID("2A37");
 
-static boolean doConnect = false;
-static boolean doScan = true;
 static BLERemoteCharacteristic* pRemoteCharacteristic;
-static BLEAdvertisedDevice* myDevice;
+static BLEAdvertisedDevice* ble_device;
+
 
 #define numFanStates 3
 static uint8_t levelPins[numFanStates] = {12, 14, 27};
@@ -31,8 +30,12 @@ struct Config {
   uint8_t HR_threshold_3 = 140;
   bool enabled = true;
 
-  bool ble_enabled = true;
+  bool ble_scan = true;
+  bool ble_hr_found = false;
   bool ble_connected = false;
+
+  uint8_t hr = 0;
+  uint8_t fan_level = 0;
  
   int8_t led;
 } config;
@@ -48,8 +51,9 @@ static void setFanLevel(uint8_t level){
   // 2: more
   // 3: full
 
-  Serial.print("Setting fan level: ");
-  Serial.println(level);
+  level = max(((uint8_t)0), min(((uint8_t)3), level));
+
+
 
   for(size_t i = 0; i < numFanStates; i++){
     digitalWrite(levelPins[i], HIGH);
@@ -67,15 +71,19 @@ static void BLE_notifyCallback(
   uint8_t* pData,
   size_t length,
   bool isNotify) {
+
+    config.hr = pData[1];
+    
     uint8_t fanLevel = 0;
     
-    
-    if(pData[1] >= config.HR_threshold_1) fanLevel = 1;
-    if(pData[1] >= config.HR_threshold_2) fanLevel = 2;
-    if(pData[1] >= config.HR_threshold_3) fanLevel = 3;
-    
+    if(pData[1] >= config.HR_threshold_1) fanLevel++;
+    if(pData[1] >= config.HR_threshold_2) fanLevel++;
+    if(pData[1] >= config.HR_threshold_3) fanLevel++;
 
-    setFanLevel(fanLevel);
+    config.fan_level = fanLevel;
+    DebugPrint("Setting fan level: ");
+    DebugPrintln(config.fan_level);
+
 
     DebugPrint("HR: ");
     DebugPrintln(pData[1]);
@@ -93,6 +101,7 @@ class MyClientCallback : public BLEClientCallbacks {
 
   void onDisconnect(BLEClient* pclient) {
     config.ble_connected = false;
+    config.ble_hr_found = false;
     DebugPrintln("[BLE] Disconnect");
     setFanLevel(0);
   }
@@ -112,6 +121,11 @@ void APCallback(WebServer *server) {
 
 
 void APICallback(WebServer *server) {
+  server->on("/ble_scan", HTTPMethod::HTTP_GET, [server](){
+    BLE_scan();
+    server->send(202);
+  });
+  
   server->on("/disconnect", HTTPMethod::HTTP_GET, [server](){
     configManager.clearWifiSettings(false);
   });
@@ -136,59 +150,46 @@ void APICallback(WebServer *server) {
 }
 
 
-bool connectToServer() {
+bool connectToDevice() {
     DebugPrint("Forming a connection to ");
-    DebugPrintln(myDevice->getAddress().toString().c_str());
+    DebugPrintln(ble_device->getAddress().toString().c_str());
     
-    BLEClient*  pClient  = BLEDevice::createClient();
-    DebugPrintln(" - Created client");
+    DebugPrintln("Creating client");
+    BLEClient*  ble_client = BLEDevice::createClient();
 
-    pClient->setClientCallbacks(new MyClientCallback());
-
+    DebugPrintln("Setting callbacks");
+    ble_client->setClientCallbacks(new MyClientCallback());
+  
     // Connect to the remove BLE Server.
-    pClient->connect(myDevice);  // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
-    DebugPrintln(" - Connected to server");
+    DebugPrintln("Connecting to server");
+    ble_client->connect(ble_device);  // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
 
     // Obtain a reference to the service we are after in the remote BLE server.
-    BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
+    DebugPrintln("Connecting to service");    
+    BLERemoteService* pRemoteService = ble_client->getService(serviceUUID);
     if (pRemoteService == nullptr) {
       DebugPrint("Failed to find our service UUID: ");
       DebugPrintln(serviceUUID.toString().c_str());
-      pClient->disconnect();
+      ble_client->disconnect();
       return false;
     }
-    DebugPrintln(" - Found our service");
 
-
+    DebugPrintln("Searching characteristic");    
     // Obtain a reference to the characteristic in the service of the remote BLE server.
     pRemoteCharacteristic = pRemoteService->getCharacteristic(charUUID);
     if (pRemoteCharacteristic == nullptr) {
       DebugPrint("Failed to find our characteristic UUID: ");
       DebugPrintln(charUUID.toString().c_str());
-      pClient->disconnect();
+      ble_client->disconnect();
       return false;
     }
-    DebugPrintln(" - Found our characteristic");
-
-
-//
-//    // Read the value of the characteristic.
-//    if(pRemoteCharacteristic->canRead()) {
-//      std::string value = pRemoteCharacteristic->readValue();
-//      DebugPrint("The characteristic value was: ");
-//      DebugPrintln(value.c_str());
-//    } else {
-//      DebugPrint("Cant read\n");
-//    }
-
+    
+    DebugPrintln("Registering Notification");    
     if(pRemoteCharacteristic->canNotify()){
       pRemoteCharacteristic->registerForNotify(BLE_notifyCallback);
-      DebugPrint("Can notify\n");      
     } else {
-      DebugPrint("Cant notify\n");      
+      DebugPrint("Notify subscription failed");      
     }
-
-    config.ble_connected = true;
     return true;
 }
 /**
@@ -206,24 +207,29 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     if (advertisedDevice.haveServiceUUID() && advertisedDevice.isAdvertisingService(serviceUUID)) {
 
       BLEDevice::getScan()->stop();
-      myDevice = new BLEAdvertisedDevice(advertisedDevice);
-      doConnect = true;
-      doScan = true;
+      ble_device = new BLEAdvertisedDevice(advertisedDevice);
+      DebugPrintln("New BLEAdvertisedDevice");
+      config.ble_hr_found = true;
+    }
+  }
+};
 
-    } // Found our server
-  } // onResult
-}; // MyAdvertisedDeviceCallbacks
-
-void BLE_setup(){
-  BLEDevice::init("");
-
-
+void fan_setup(){
   for(size_t i = 0; i < numFanStates; i++){
     pinMode(levelPins[i], OUTPUT);
     digitalWrite(levelPins[i], HIGH);
   }
-  setFanLevel(0);
-  BLE_scan();
+
+  config.fan_level = 0;
+  DebugPrint("Setting fan level: ");
+  DebugPrintln(config.fan_level);
+}
+
+void BLE_setup(){
+  BLEDevice::init("");
+  config.ble_scan = false;
+  config.ble_hr_found = false;
+  config.ble_connected = false;
 }
 
   
@@ -237,6 +243,7 @@ void BLE_scan(){
   pBLEScan->setWindow(449);
   pBLEScan->setActiveScan(true);
   pBLEScan->start(2, false);
+  config.ble_scan = false;
 }
 
 void setup() {
@@ -244,7 +251,10 @@ void setup() {
   Serial.begin(115200);
   DebugPrintln(F(""));
 
+  fan_setup();
+  
   meta.version = 3;
+
 
   // Setup config manager
   configManager.setAPName("Tailwind");
@@ -262,9 +272,12 @@ void setup() {
   configManager.addParameter("HR_threshold_2", &config.HR_threshold_2);
   configManager.addParameter("HR_threshold_3", &config.HR_threshold_3);
   configManager.addParameter("enabled", &config.enabled);
-  configManager.addParameter("ble_enabled", &config.ble_enabled);
+  configManager.addParameter("ble_scan", &config.ble_scan);
   configManager.addParameter("ble_connected", &config.ble_connected, get);
 
+
+  configManager.addParameter("hr", &config.hr, get);
+  configManager.addParameter("fan_level", &config.fan_level);
 
 
   // Meta Settings
@@ -283,13 +296,16 @@ void setup() {
 
 void loop() {
   configManager.loop();
-  if (!config.ble_connected && config.ble_enabled) BLE_scan();
-  if (doConnect) {
-    if (connectToServer()) {
-      DebugPrintln("Connected to Server.");
-    } else {
-      DebugPrintln("Failed to connect to Server.");
-    }
-    doConnect = false;
-  }
+  if(!config.ble_connected && config.ble_hr_found) connectToDevice();
+  setFanLevel(config.fan_level);
+  
+//  if (config.ble_scan && !config.ble_connected) BLE_scan();
+//  if (doConnect) {
+//    if (connectToServer()) {
+//      DebugPrintln("Connected to Server.");
+//    } else {
+//      DebugPrintln("Failed to connect to Server.");
+//    }
+//    doConnect = false;
+//  }
 }
