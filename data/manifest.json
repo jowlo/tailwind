@@ -1,0 +1,14 @@
+{
+  "short_name": "Tailwind",
+  "name": "Tailwind Fan",
+  "start_url": "/index.html",
+  "icons": [
+    {
+      "src": "fan.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "display": "standalone",
+  "orientation": "portrait"
+}

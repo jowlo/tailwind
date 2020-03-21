@@ -1,13 +1,10 @@
 #include "ConfigManager.h"
 #include "BLEDevice.h"
 
-
-
 const char *settingsHTML = (char *)"/settings.html";
 const char *stylesCSS = (char *)"/styles.css";
 const char *mainJS = (char *)"/main.js";
 const char *fanSVG = (char *)"/fan.svg";
-
 
 
 // The remote service we wish to connect to.
@@ -40,11 +37,6 @@ struct Config {
   int8_t led;
 } config;
 
-struct Metadata {
-  int8_t version;
-} meta;
-
-
 static void setFanLevel(uint8_t level){
   // 0: off
   // 1: some
@@ -52,8 +44,6 @@ static void setFanLevel(uint8_t level){
   // 3: full
 
   level = max(((uint8_t)0), min(((uint8_t)3), level));
-
-
 
   for(size_t i = 0; i < numFanStates; i++){
     digitalWrite(levelPins[i], HIGH);
@@ -72,6 +62,8 @@ static void BLE_notifyCallback(
   size_t length,
   bool isNotify) {
 
+    if(pData[1] == config.hr) return;
+    
     config.hr = pData[1];
     
     uint8_t fanLevel = 0;
@@ -84,11 +76,8 @@ static void BLE_notifyCallback(
     DebugPrint("Setting fan level: ");
     DebugPrintln(config.fan_level);
 
-
     DebugPrint("HR: ");
     DebugPrintln(pData[1]);
-    DebugPrint("Fan Level: ");
-    DebugPrintln(fanLevel);
     
 }
 
@@ -114,20 +103,29 @@ void APCallback(WebServer *server) {
     server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
         configManager.streamFile(stylesCSS, mimeCSS);
     });
-    configManager.save();
-
-    DebugPrintln(F("AP Mode Enabled. You can call other functions that should run after a mode is enabled ... "));
+    
+    server->on("/fan.svg", HTTPMethod::HTTP_GET, [server](){
+      configManager.streamFile(fanSVG, mimeSVG);
+    });
+    
 }
 
 
 void APICallback(WebServer *server) {
+
+  configManager.setAPFilename("/index_api.html");
+  
   server->on("/ble_scan", HTTPMethod::HTTP_GET, [server](){
     BLE_scan();
     server->send(202);
   });
   
   server->on("/disconnect", HTTPMethod::HTTP_GET, [server](){
-    configManager.clearWifiSettings(false);
+    configManager.clearWifiSettings(true);
+  });
+
+  server->on("/manifest.json", HTTPMethod::HTTP_GET, [server](){
+    configManager.streamFile("/manifest.json", mimeJSON);
   });
   
   server->on("/settings.html", HTTPMethod::HTTP_GET, [server](){
@@ -253,9 +251,6 @@ void setup() {
 
   fan_setup();
   
-  meta.version = 3;
-
-
   // Setup config manager
   configManager.setAPName("Tailwind");
   configManager.setAPFilename("/index.html");
@@ -279,10 +274,6 @@ void setup() {
   configManager.addParameter("hr", &config.hr, get);
   configManager.addParameter("fan_level", &config.fan_level);
 
-
-  // Meta Settings
-  configManager.addParameter("version", &meta.version, get);
-
   // Init Callbacks
   configManager.setAPCallback(APCallback);
   configManager.setAPICallback(APICallback);
@@ -298,14 +289,4 @@ void loop() {
   configManager.loop();
   if(!config.ble_connected && config.ble_hr_found) connectToDevice();
   setFanLevel(config.fan_level);
-  
-//  if (config.ble_scan && !config.ble_connected) BLE_scan();
-//  if (doConnect) {
-//    if (connectToServer()) {
-//      DebugPrintln("Connected to Server.");
-//    } else {
-//      DebugPrintln("Failed to connect to Server.");
-//    }
-//    doConnect = false;
-//  }
 }

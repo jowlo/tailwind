@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <script type="text/javascript">
+          set_fan_level = function(lvl) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("PUT", "/settings", true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.send(JSON.stringify({'fan_level': lvl}));
+          }
+          ble_scan = function(lvl) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/ble_scan", true);
+            xhr.send();
+          }
+        </script>
+        <link rel="stylesheet" href="styles.css">
+        <link rel="manifest" href="manifest.json">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>ConfigManager</title>
+    </head>
+    <body>
+        <div class="container">
+            <div class="card">
+              <h3>Fan Speed</h1>
+              <div class="button-container">
+                <button class="button" onclick="set_fan_level(0)">0</button> 
+                <button class="button" onclick="set_fan_level(1)">1</button> 
+                <button class="button" onclick="set_fan_level(2)">2</button> 
+                <button class="button" onclick="set_fan_level(3)">3</button> 
+              </div>
+            </div>
+            <div class="card">
+              <h3>Enable HR</h1>
+              <div class="button-container">
+                <button class="button" onclick="ble_scan()">Scan</button> 
+              </div>
+            </div>
+            <div class="card">
+              <h3>Wifi Details</h1>
+              <div>
+                  <a class="button" href="/disconnect">Clear Settings</a> 
+              </div>
+            </div>
+        </div>
+    </body>
+</html>
