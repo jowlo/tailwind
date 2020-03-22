@@ -1,12 +1,17 @@
 {
   "short_name": "Tailwind",
   "name": "Tailwind Fan",
-  "start_url": "/index.html",
+  "start_url": "/",
   "icons": [
     {
       "src": "fan.svg",
       "type": "image/svg+xml",
-      "sizes": "192x192 512x512"
+      "sizes": "192x192"
+    },
+    {
+      "src": "fan.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
     }
   ],
   "display": "standalone",

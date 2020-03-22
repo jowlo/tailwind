@@ -115,8 +115,17 @@ void APICallback(WebServer *server) {
 
   configManager.setAPFilename("/index_api.html");
   
-  server->on("/ble_scan", HTTPMethod::HTTP_GET, [server](){
+  server->on("/ble_connect", HTTPMethod::HTTP_GET, [server](){
     BLE_scan();
+    server->send(202);
+  });
+
+
+  server->on("/ble_disconnect", HTTPMethod::HTTP_GET, [server](){
+    config.ble_connected = false;
+    config.ble_hr_found = false;
+    setFanLevel(0);
+    BLEDevice::deinit();
     server->send(202);
   });
   
@@ -151,6 +160,7 @@ void APICallback(WebServer *server) {
 bool connectToDevice() {
     DebugPrint("Forming a connection to ");
     DebugPrintln(ble_device->getAddress().toString().c_str());
+    DebugPrintln(ble_device->getName().c_str());
     
     DebugPrintln("Creating client");
     BLEClient*  ble_client = BLEDevice::createClient();
@@ -235,6 +245,9 @@ void BLE_setup(){
   // have detected a new device.  Specify that we want active scanning and start the
   // scan to run for 5 seconds.
 void BLE_scan(){
+  if(!BLEDevice::getInitialized()) {
+    BLEDevice::init("");
+  }
   BLEScan* pBLEScan = BLEDevice::getScan();
   pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
   pBLEScan->setInterval(1349);

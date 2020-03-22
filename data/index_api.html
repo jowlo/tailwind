@@ -5,43 +5,59 @@
           var fan_levels = 3;
 
           var state = {}
+          var init = true;
 
           parse_state= function() {
             // Fan levels
-            for (i = 0; i <= fan_levels; i++){
-              if(i == state.fan_level) {
-                document.getElementById("fan-level-btn-" + i).classList.add('mdl-button--accent');
-              } else {
-                document.getElementById("fan-level-btn-" + i).classList.remove('mdl-button--accent');
-              }
-            }
+            document.getElementById("fan-level-slider").MaterialSlider.change(state.fan_level)
 
             // HR
             if (state.ble_connected) {
               document.getElementById("ble-hr").textContent = state.hr;
+              document.getElementById("ble-state").textContent = "bluetooth_connected";
+              document.getElementById("btn-ble-connect").disabled = true;
+              document.getElementById("btn-ble-disconnect").disabled = false;
+              document.getElementById("ble-hr-container").style.color = "#ff0653";
             } else {
-              document.getElementById("ble-hr").textContent = "n/a";
+              document.getElementById("ble-state").textContent = "bluetooth_disabled";
+              document.getElementById("ble-hr").textContent = "--";
+              document.getElementById("btn-ble-connect").disabled = false;
+              document.getElementById("btn-ble-disconnect").disabled = true;
+              document.getElementById("ble-hr-container").style.color = "lightgrey";
             }
-            for (i = 1; i <= fan_levels; i++){
-              document.getElementById("hr-thr-" + i).parentElement.MaterialTextfield.change(state["HR_threshold_"+i]);
+
+            if (init) {
+              for (i = 1; i <= fan_levels; i++){
+                document.getElementById("hr-thr-" + i).parentElement.MaterialTextfield.change(state["HR_threshold_"+i]);
+              }
+              init = false;
             }
 
           }
 
 
           set_fan_level = function(lvl) {
-            state.fan_level = lvl
-            parse_state()
+            state.fan_level = parseInt(lvl);
             var xhr = new XMLHttpRequest();
             xhr.open("PUT", "/settings", true);
             xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.send(JSON.stringify({'fan_level': lvl}));
+            xhr.send(JSON.stringify({'fan_level': state.fan_level}));
           }
 
-          ble_scan = function(lvl) {
+          ble_connect = function() {
             var xhr = new XMLHttpRequest();
-            xhr.open("GET", "/ble_scan", true);
+            xhr.open("GET", "/ble_connect", true);
             xhr.send();
+            document.getElementById("ble-state").textContent = "bluetooth_searching";
+            document.getElementById("btn-ble-connect").disabled = true;
+          }
+
+          ble_disconnect = function() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/ble_disconnect", true);
+            xhr.send();
+            document.getElementById("btn-ble-disconnect").disabled = true;
+            document.getElementById("ble-state").textContent = "bluetooth_disabled";
           }
         
           get_state = function() {
@@ -57,15 +73,29 @@
             xhr.send();
           }
 
+          send_settings = function() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("PUT", "/settings", true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.send(JSON.stringify({
+              'HR_threshold_1': parseInt(document.getElementById("hr-thr-1").value),
+              'HR_threshold_2': parseInt(document.getElementById("hr-thr-2").value),
+              'HR_threshold_3': parseInt(document.getElementById("hr-thr-3").value)
+            }));
+          }
+
+          get_state()
+
           settings_timer = setInterval(get_state, 2000);
         </script>
         <link rel="manifest" href="manifest.json">
+        <meta name="theme-color" content="#3f51b5" />
         <link rel="icon" href="fan.svg">
 
         <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
         <link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-light_blue.min.css">
         <script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
-
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
 .material-icons {
     vertical-align: -7px; /*Change this to adjust the icon*/
@@ -90,47 +120,45 @@
   <div class="mdl-tabs mdl-js-tabs mdl-js-ripple-effect">
     <div class="mdl-tabs__tab-bar">
       <a class="mdl-tabs__tab" href="#manual">
-        <i class="material-icons">toys</i>
+        <i class="material-icons md-36">toys</i>
         Manual
       </a>
       <a class="mdl-tabs__tab" href="#hr">
-        <i class="material-icons">favorite</i>
+        <i class="material-icons md-36">favorite</i>
         Heartrate
       </a>
       <a class="mdl-tabs__tab" href="#settings">
-        <i class="material-icons">settings</i>
+        <i class="material-icons md-36">settings</i>
         Settings
       </a>
     </div>
+
+
     <div class="mdl-tabs__panel is-active" id="manual">
       <div class="mdl-grid">
           <div class="mdl-cell mdl-cell--12-col">
-                <button class="mdl-button mdl-js-button mdl-button--fab mdl-js-ripple-effect" id="fan-level-btn-0" onclick="set_fan_level(0)">
-                  0
-                </button> 
-                <button class="mdl-button mdl-js-button mdl-button--fab mdl-js-ripple-effect" id="fan-level-btn-1" onclick="set_fan_level(1)">
-                  1
-                </button> 
-                <button class="mdl-button mdl-js-button mdl-button--fab mdl-js-ripple-effect" id="fan-level-btn-2" onclick="set_fan_level(2)">
-                  2
-                </button> 
-                <button class="mdl-button mdl-js-button mdl-button--fab mdl-js-ripple-effect" id="fan-level-btn-3" onclick="set_fan_level(3)">
-                  3
-                </button> 
+            <input class="mdl-slider mdl-js-slider" type="range" min="0" max="3" value="0" step="1" tabindex="0" id="fan-level-slider" oninput="set_fan_level(this.value)">
           </div> <!-- mdl-cell -->
       </div> <!-- mdl-grid -->
     </div> <!-- mdl-tabs -->
 
     <div class="mdl-tabs__panel" id="hr">
       <div class="mdl-grid">
-          <div class="mdl-cell mdl-cell--2-col">
-            HR: <span id="ble-hr"></span>
+
+
+          <div class="mdl-cell mdl-cell--12-col">
+            <div class="container" style="position:relative; text-align:center; color: lightgrey" id="ble-hr-container">
+              <i class="material-icons" style="font-size: 1800%">&#xE87E;</i>
+              <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                <span style="font-size:350%" id="ble-hr">--</span>
+              </div>
+            </div>
           </div>
 
           <div class="mdl-cell mdl-cell--4-col">
-                <button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent" onclick="set_fan_level(3)">
-                  Scan
-          </button> 
+            <i class="material-icons" style="font-size: 200%;vertical-align:-14px" id="ble-state">bluetooth_disabled</i>
+           <button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent" onclick="ble_connect()" id="btn-ble-connect">Connect</button> 
+           <button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent" onclick="ble_disconnect()" id="btn-ble-disconnect">Disconnect</button> 
           </div>
 
           <div class="mdl-cell mdl-cell--8-col ">
