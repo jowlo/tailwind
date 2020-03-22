@@ -2,46 +2,191 @@
 <html lang="en">
     <head>
         <script type="text/javascript">
+          var fan_levels = 3;
+
+          var state = {}
+
+          parse_state= function() {
+            // Fan levels
+            for (i = 0; i <= fan_levels; i++){
+              if(i == state.fan_level) {
+                document.getElementById("fan-level-btn-" + i).classList.add('mdl-button--accent');
+              } else {
+                document.getElementById("fan-level-btn-" + i).classList.remove('mdl-button--accent');
+              }
+            }
+
+            // HR
+            if (state.ble_connected) {
+              document.getElementById("ble-hr").textContent = state.hr;
+            } else {
+              document.getElementById("ble-hr").textContent = "n/a";
+            }
+            for (i = 1; i <= fan_levels; i++){
+              document.getElementById("hr-thr-" + i).parentElement.MaterialTextfield.change(state["HR_threshold_"+i]);
+            }
+
+          }
+
+
           set_fan_level = function(lvl) {
+            state.fan_level = lvl
+            parse_state()
             var xhr = new XMLHttpRequest();
             xhr.open("PUT", "/settings", true);
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.send(JSON.stringify({'fan_level': lvl}));
           }
+
           ble_scan = function(lvl) {
             var xhr = new XMLHttpRequest();
             xhr.open("GET", "/ble_scan", true);
             xhr.send();
           }
+        
+          get_state = function() {
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function() {
+              if (this.readyState == 4 && this.status == 200){
+                state = JSON.parse(this.responseText);
+                parse_state()
+                console.log(state);
+              }
+            }
+            xhr.open("GET", "/settings", true);
+            xhr.send();
+          }
+
+          settings_timer = setInterval(get_state, 2000);
         </script>
-        <link rel="stylesheet" href="styles.css">
         <link rel="manifest" href="manifest.json">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>ConfigManager</title>
+        <link rel="icon" href="fan.svg">
+
+        <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+        <link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-light_blue.min.css">
+        <script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+
+        <style>
+.material-icons {
+    vertical-align: -7px; /*Change this to adjust the icon*/
+}
+        </style>
+
+        <title>Tailwind</title>
     </head>
     <body>
-        <div class="container">
-            <div class="card">
-              <h3>Fan Speed</h1>
-              <div class="button-container">
-                <button class="button" onclick="set_fan_level(0)">0</button> 
-                <button class="button" onclick="set_fan_level(1)">1</button> 
-                <button class="button" onclick="set_fan_level(2)">2</button> 
-                <button class="button" onclick="set_fan_level(3)">3</button> 
+
+  <div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
+  <header class="mdl-layout__header">
+  <img class="mdl-layout-icon" src="fan.svg">
+    <div class="mdl-layout__header-row">
+      <!-- Title -->
+      <span class="mdl-layout-title">
+        Tailwind
+      </span>
+    </div>
+  </header>
+
+  <div class="mdl-tabs mdl-js-tabs mdl-js-ripple-effect">
+    <div class="mdl-tabs__tab-bar">
+      <a class="mdl-tabs__tab" href="#manual">
+        <i class="material-icons">toys</i>
+        Manual
+      </a>
+      <a class="mdl-tabs__tab" href="#hr">
+        <i class="material-icons">favorite</i>
+        Heartrate
+      </a>
+      <a class="mdl-tabs__tab" href="#settings">
+        <i class="material-icons">settings</i>
+        Settings
+      </a>
+    </div>
+    <div class="mdl-tabs__panel is-active" id="manual">
+      <div class="mdl-grid">
+          <div class="mdl-cell mdl-cell--12-col">
+                <button class="mdl-button mdl-js-button mdl-button--fab mdl-js-ripple-effect" id="fan-level-btn-0" onclick="set_fan_level(0)">
+                  0
+                </button> 
+                <button class="mdl-button mdl-js-button mdl-button--fab mdl-js-ripple-effect" id="fan-level-btn-1" onclick="set_fan_level(1)">
+                  1
+                </button> 
+                <button class="mdl-button mdl-js-button mdl-button--fab mdl-js-ripple-effect" id="fan-level-btn-2" onclick="set_fan_level(2)">
+                  2
+                </button> 
+                <button class="mdl-button mdl-js-button mdl-button--fab mdl-js-ripple-effect" id="fan-level-btn-3" onclick="set_fan_level(3)">
+                  3
+                </button> 
+          </div> <!-- mdl-cell -->
+      </div> <!-- mdl-grid -->
+    </div> <!-- mdl-tabs -->
+
+    <div class="mdl-tabs__panel" id="hr">
+      <div class="mdl-grid">
+          <div class="mdl-cell mdl-cell--2-col">
+            HR: <span id="ble-hr"></span>
+          </div>
+
+          <div class="mdl-cell mdl-cell--4-col">
+                <button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent" onclick="set_fan_level(3)">
+                  Scan
+          </button> 
+          </div>
+
+          <div class="mdl-cell mdl-cell--8-col ">
+            <h5>HR Thresholds</h5>
+              <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">
+                <input class="mdl-textfield__input" type="text" pattern="-?[0-9]*(\.[0-9]+)?" name="HR_threshold_1" id="hr-thr-1">
+                <label class="mdl-textfield__label" for="hr-thr-1">HR Threshold 1</label>
+                <span class="mdl-textfield__error">Input is not a number!</span>
               </div>
-            </div>
-            <div class="card">
-              <h3>Enable HR</h1>
-              <div class="button-container">
-                <button class="button" onclick="ble_scan()">Scan</button> 
+
+              <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">
+                <input class="mdl-textfield__input" type="text" pattern="-?[0-9]*(\.[0-9]+)?" name="HR_threshold_2" id="hr-thr-2">
+                <label class="mdl-textfield__label" for="hr-thr-2">HR Threshold 2</label>
+                <span class="mdl-textfield__error">Input is not a number!</span>
               </div>
-            </div>
-            <div class="card">
-              <h3>Wifi Details</h1>
-              <div>
-                  <a class="button" href="/disconnect">Clear Settings</a> 
+
+              <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">
+                <input class="mdl-textfield__input" type="text" pattern="-?[0-9]*(\.[0-9]+)?" name="HR_threshold_3" id="hr-thr-3">
+                <label class="mdl-textfield__label" for="hr-thr-3">HR Threshold 3</label>
+                <span class="mdl-textfield__error">Input is not a number!</span>
               </div>
-            </div>
-        </div>
-    </body>
+              <br />
+
+              <button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button" onclick="send_settings()">Save</button> 
+
+            </form>
+          </div> <!-- mdl-cell -->
+      </div> <!-- mdl-grid -->
+    </div> <!-- mdl-tabs -->
+
+    <div class="mdl-tabs__panel" id="settings">
+      <div class="mdl-grid">
+
+          <div class="mdl-cell mdl-cell--8-col">
+            <form method="post" action="/settings">
+
+              <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">
+                <input class="mdl-textfield__input" name="device_name" type="text" id="sample3">
+                <label class="mdl-textfield__label" for="sample3">Device Name</label>
+              </div>
+
+
+          </div>
+          </div>
+
+          <div class="mdl-cell mdl-cell--8-col ">
+            <h5>Wifi Details</h5>
+            <form action="/disconnect">
+              <button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent">Clear Settings</button> 
+            </form>
+          </div> <!-- mdl-cell -->
+      </div> <!-- mdl-grid -->
+
+    </div> <!-- mdl-tabs__panel -->
+  </div> <!-- mdl-tabs -->
+
+  </div> <!-- mdl-layout -->
+ </body>
 </html>
