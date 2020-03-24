@@ -1,5 +1,8 @@
 #include "ConfigManager.h"
 #include "BLEDevice.h"
+#include "BLEServer.h"
+#include <BLEUtils.h>
+#include <BLE2902.h>
 
 const char *settingsHTML = (char *)"/settings.html";
 const char *stylesCSS = (char *)"/styles.css";
@@ -10,14 +13,21 @@ const char *fanSVG = (char *)"/fan.svg";
 // The remote service we wish to connect to.
 static BLEUUID serviceUUID("180D");
 // The characteristic of the remote service we are interested in.
-static BLEUUID    charUUID("2A37");
+static BLEUUID charUUID("2A37");
 
 static BLERemoteCharacteristic* pRemoteCharacteristic;
 static BLEAdvertisedDevice* ble_device;
 
 
+static BLEServer* ble_server;
+static BLEService* ble_local_service;
+static BLECharacteristic* ble_local_characteristic;
+
+
 #define numFanStates 3
 static uint8_t levelPins[numFanStates] = {12, 14, 27};
+
+static uint8_t hr_rec[2] = {0,0};
 
 
 struct Config {
@@ -61,8 +71,15 @@ static void BLE_notifyCallback(
   uint8_t* pData,
   size_t length,
   bool isNotify) {
+    
+    ble_local_characteristic->setValue(pData, length);
+    ble_local_characteristic->notify();
+    DebugPrintln("[BLE Server] Notify sent"); 
 
+    
     if(pData[1] == config.hr) return;
+
+
     
     config.hr = pData[1];
     
@@ -91,6 +108,7 @@ class MyClientCallback : public BLEClientCallbacks {
   void onDisconnect(BLEClient* pclient) {
     config.ble_connected = false;
     config.ble_hr_found = false;
+    BLEDevice::getAdvertising()->stop();
     DebugPrintln("[BLE] Disconnect");
     setFanLevel(0);
   }
@@ -157,6 +175,17 @@ void APICallback(WebServer *server) {
 }
 
 
+class MyServerCallbacks: public BLEServerCallbacks {
+    void onConnect(BLEServer* pServer) {
+      DebugPrintln("[BLE Server] Client connected");
+    };
+
+    void onDisconnect(BLEServer* pServer) {
+      DebugPrintln("[BLE Server] Client disconnected");
+    }
+};
+
+
 bool connectToDevice() {
     DebugPrint("Forming a connection to ");
     DebugPrintln(ble_device->getAddress().toString().c_str());
@@ -198,8 +227,41 @@ bool connectToDevice() {
     } else {
       DebugPrint("Notify subscription failed");      
     }
+
+    ble_server = BLEDevice::createServer();
+    DebugPrintln("[BLE Server] created"); 
+    ble_server->setCallbacks(new MyServerCallbacks());     
+    DebugPrintln("[BLE Server] Callbacks registered"); 
+
+
+    ble_local_service = ble_server->createService(serviceUUID);
+    DebugPrintln("[BLE Server] Service created");      
+    ble_local_characteristic = ble_local_service->createCharacteristic(charUUID, 
+      BLECharacteristic::PROPERTY_NOTIFY);
+    ble_local_characteristic->addDescriptor(new BLE2902());
+    DebugPrintln("[BLE Server] Characteristic created");
+
+    ble_local_service->start();
+    DebugPrintln("[BLE Server] Service started");
+
+    BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+    pAdvertising->addServiceUUID(serviceUUID);
+    pAdvertising->setScanResponse(true);
+    pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
+    pAdvertising->setMinPreferred(0x12);
+    BLEDevice::startAdvertising();
+    DebugPrintln("[BLE Server] Advertising started");
+    
     return true;
+
+    
 }
+
+
+
+
+
+
 /**
  * Scan for BLE servers and find the first one that advertises the service we are looking for.
  */
@@ -234,7 +296,7 @@ void fan_setup(){
 }
 
 void BLE_setup(){
-  BLEDevice::init("");
+  BLEDevice::init("Tailwind Fan");
   config.ble_scan = false;
   config.ble_hr_found = false;
   config.ble_connected = false;
@@ -246,11 +308,12 @@ void BLE_setup(){
   // scan to run for 5 seconds.
 void BLE_scan(){
   if(!BLEDevice::getInitialized()) {
-    BLEDevice::init("");
+    BLEDevice::init("Tailwind Fan");
   }
   BLEScan* pBLEScan = BLEDevice::getScan();
   pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
   pBLEScan->setInterval(1349);
+  
   pBLEScan->setWindow(449);
   pBLEScan->setActiveScan(true);
   pBLEScan->start(2, false);
