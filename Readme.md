@@ -1,3 +1,4 @@
+<img src="data/fan.svg" alt="Tailwind Logo" width="84px" height="84px">
 # Smart Fan for indoor cycling
 
 Use a cheap ESP32 (e.g. a cheap [Wroom32](https://www.espressif.com/en/products/modules/esp-wroom-32/overview)) and an even cheaper standard relais board to build a smart controller for a fan. You can easily control the fan's speed from your smartphone while riding on your indoor trainer. 
@@ -22,10 +23,12 @@ As many heart rate sensors only support a single connection, tailwind itself adv
 
 The controller features configuration page for setting up WiFi if not connected to any network. 
 
+## Screenshots
+<img src="screenshots/manual.png" alt="Manual Speed" width="120px"> <img src="screenshots/hr.png" alt="HR based (not connected)" width="120px"> <img src="screenshots/settings.png" alt="Settings (reset option)" width="120px">
 
 ## Dependencies
 
-It uses the following Arduino Libraries, all installable via the Arduino *Library Managerr*:
+It uses the these Arduino Libraries, installable via the Arduino *Library Managerr*:
   * [ConfigManager](https://github.com/nrwiersma/ConfigManager)
 
-To transfer the icon and HTML files, install [Arduino ESP32 filesystem uploader](https://github.com/me-no-dev/arduino-esp32fs-plugin) and upload all files in the `data` folder.
+To transfer the resources to the ESP32, install [Arduino ESP32 filesystem uploader](https://github.com/me-no-dev/arduino-esp32fs-plugin) and upload all files in the `data` folder.
