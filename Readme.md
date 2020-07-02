@@ -1,4 +1,5 @@
 <img src="data/fan.svg" alt="Tailwind Logo" width="84px" height="84px">
+
 # Smart Fan for indoor cycling
 
 Use a cheap ESP32 (e.g. a cheap [Wroom32](https://www.espressif.com/en/products/modules/esp-wroom-32/overview)) and an even cheaper standard relais board to build a smart controller for a fan. You can easily control the fan's speed from your smartphone while riding on your indoor trainer. 
